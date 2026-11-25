@@ -55,6 +55,9 @@ members = [
     "exercises/sys_map",
     "exercises/simple_hv",
     "exercises/ramfs_rename",
+    # ****** START xisanlou add at  25102404 No.1
+    "axfs_ramfs",
+    # ****** END   xisanlou add at 25102404 No.1
 ]
 
 [workspace.package]
@@ -90,7 +93,9 @@ axsync = { path = "modules/axsync" }
 axtask = { path = "modules/axtask" }
 axdma = { path = "modules/axdma" }
 elf = { path = "modules/elf" }
-axfs_ramfs = { path = "./axfs_ramfs" }
+# ****** START xisanlou add at  25102404 No.2
+axfs_ramfs = { path = "axfs_ramfs" }
+# ****** END   xisanlou add at 25102404 No.1
 
 [patch.crates-io]
 kernel_guard = { path = "../crates/kernel_guard"} 

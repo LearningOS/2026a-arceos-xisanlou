@@ -9,7 +9,10 @@
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => {
-        $crate::io::__print_impl(format_args!($($arg)*));
+        // ****** START xisanlou add at  25102404 No.1
+        //$crate::io::__print_impl(format_args!($($arg)*));
+        $crate::io::__print_impl(format_args!("\x1b[95m{}\x1b[0m", format_args!($($arg)*)));
+        // ****** END   xisanlou add at 25102404 No.1
     }
 }
 
@@ -18,6 +21,9 @@ macro_rules! print {
 macro_rules! println {
     () => { $crate::print!("\n") };
     ($($arg:tt)*) => {
-        $crate::io::__print_impl(format_args!("{}\n", format_args!($($arg)*)));
+        // ****** START xisanlou add at  25102404 No.2
+        //$crate::io::__print_impl(format_args!("{}\n", format_args!($($arg)*)));
+        $crate::io::__print_impl(format_args!("\x1b[95m{}\x1b[0m\n", format_args!($($arg)*)));
+        // ****** END   xisanlou add at 25102404 No.2
     }
 }

@@ -102,16 +102,30 @@ fn vmexit_handler(ctx: &mut VmCpuRegisters) -> bool {
             }
         },
         Trap::Exception(Exception::IllegalInstruction) => {
-            panic!("Bad instruction: {:#x} sepc: {:#x}",
+            // ****** START xisanlou add at  26012207 No.1
+            ax_println!("Bad instruction: {:#x} sepc: {:#x}",
                 stval::read(),
                 ctx.guest_regs.sepc
             );
+
+            // 设置guest的A1寄存器的值为0x1234
+            ctx.guest_regs.gprs.set_reg(A1, 0x1234);
+            // guest的sepc自增一条指令长度
+            ctx.guest_regs.sepc += 4;
+            // ****** END   xisanlou add at 26012207 No.1
         },
         Trap::Exception(Exception::LoadGuestPageFault) => {
-            panic!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
+            // ****** START xisanlou add at  26012207 No.2
+            ax_println!("LoadGuestPageFault: stval{:#x} sepc: {:#x}",
                 stval::read(),
                 ctx.guest_regs.sepc
             );
+
+            // 设置guest的A0寄存器的值为0x6688
+            ctx.guest_regs.gprs.set_reg(A0, 0x6688);
+            // guest的sepc寄存器自增一条指令长度
+            ctx.guest_regs.sepc += 4;
+            // ****** END   xisanlou add at 26012207 No.2
         },
         _ => {
             panic!(

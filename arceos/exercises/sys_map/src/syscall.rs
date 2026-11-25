@@ -9,6 +9,13 @@ use axtask::TaskExtRef;
 use axhal::paging::MappingFlags;
 use arceos_posix_api as api;
 
+// ****** START xisanlou add at  25122606 No.1
+use memory_addr::{is_aligned_4k, VirtAddr, VirtAddrRange, align_up_4k};
+use alloc::vec::Vec;
+
+use axhal::mem::phys_to_virt;
+// ****** END   xisanlou add at 25122606 No.1
+
 const SYS_IOCTL: usize = 29;
 const SYS_OPENAT: usize = 56;
 const SYS_CLOSE: usize = 57;
@@ -140,7 +147,139 @@ fn sys_mmap(
     fd: i32,
     _offset: isize,
 ) -> isize {
-    unimplemented!("no sys_mmap!");
+    // ****** START xisanlou add at  25122606 No.2
+    // 计算所需要分配的内存的大小
+    let mem_size = align_up_4k(length);
+
+    // 检查"_offset"与内存页大小4K对齐及大于0
+    if _offset < 0 {
+        ax_println!("Argument _offset={} is not legitimate. ", _offset);
+        return -1;
+    }
+    if !is_aligned_4k(_offset as usize) {
+        ax_println!("Argument _offset={} is not aligned 4k ", _offset);
+        return -1;
+    }
+
+    // 检查句柄fd的合法性
+    if fd < 0 && fd != -1 {
+        ax_println!("Argument fd={} is not legitimate.", fd);
+        return -1;
+    }
+
+    // 转换prot到MappingFlags
+    let mapping_flags: MappingFlags;
+    if let Some(mprot) = MmapProt::from_bits(prot) {
+        mapping_flags = MappingFlags::from(mprot);
+    } else {
+        ax_println!("Argument prot={} is not legitimate.", prot);
+        return -1;
+    }
+
+    // 转换参数flags到MmapFlags
+    let mmap_flags: MmapFlags;
+    if let Some(parse_m_flags) = MmapFlags::from_bits(flags) {
+        mmap_flags = parse_m_flags;
+    } else {
+        ax_println!("Argument flags={} is not legitimate.", flags);
+        return -1;
+    }
+
+    // 获得当前任务
+    let curr = current();
+
+    // 根据参数addr是否为Null来确定内存的起始地址
+    let start_addr: VirtAddr;
+    if addr.is_null() {
+        // 地址为空，自动分配起始地址
+        // 获取用户地址空间
+        let aspace = curr.task_ext().aspace.lock();
+        let range_start = aspace.base();
+        let range_end = aspace.end();
+        // 在用户地址空间中找到一个可用VirtAddr
+        if let Some(virt_addr) = aspace.find_free_area(
+                range_start, 
+                mem_size, 
+                VirtAddrRange::new(range_start, range_end)
+            ) 
+        {
+            // 找到满足要求的内存块
+            start_addr = virt_addr;
+        } else {
+            // 未找到符合要求的内存空间
+            ax_println!("Can not find a map area in user address space for sys_mmap.");
+            return -1;
+        }
+    } else {
+        // 使用参数传入的地址作为映射起始地址
+        
+        start_addr = VirtAddr::from_mut_ptr_of(addr);
+        // 检查addr是否4k对齐
+        if !is_aligned_4k(start_addr.as_usize()) {
+            ax_println!("Argument addr={} is not aligned 4k ", start_addr.as_usize());
+            return -1;
+        }
+    }
+
+    // 为sys_mmap分配内存并进行映射
+    let mut uspace = curr.task_ext().aspace.lock();
+    uspace.map_alloc(start_addr, mem_size, mapping_flags, true).unwrap();
+
+    // 如果fd为-1, 则直接返回起始地址
+    if fd == -1 {
+        return start_addr.as_usize() as isize;
+    }
+
+    // 加载文件到缓冲区
+    // 定义缓冲区为Vec
+    let length_offset = length + _offset as usize;
+    let mut buf: Vec<u8> = Vec::with_capacity(length_offset);
+    let buf_ptr = buf.as_mut_ptr();
+    // 读取fd内容到缓冲区
+    let dst = unsafe { core::slice::from_raw_parts_mut(buf_ptr as *mut u8, length_offset)};
+    let result = api::get_file_like(fd as c_int); 
+    match result {
+        Ok(file) => {
+            // 打开文件成功,读取文件内容到缓冲区
+            match file.read(dst) {
+                Ok(_) => {
+                // 读取文件成功
+                ax_println!("Read file complete: fd={}.", fd);
+                },
+                Err(err) => {
+                    // 读取文件内容失败
+                    ax_println!("Read file Error: fd={} ERROR: {:?}", fd, err);
+                    return -1;
+                }
+            }
+        },
+        Err(e) => {
+            // 打开文件失败
+            ax_println!("Open file Error: {:?} fd={}.", e, fd);
+            return -1;
+        }   
+    }
+
+    // 获得start_addr的物理地址
+    let (paddr, _, _) = uspace
+        .page_table()
+        .query(start_addr)
+        .unwrap_or_else(|_| panic!("Mapping failed for segment: {:#x}", start_addr));
+    ax_println!("paddr: {:#x}", paddr);
+
+    // 复制文件内容到目的内存地址区间
+    let ptr2 = buf.as_ptr() as *const u8;
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            ptr2.offset(_offset),
+            phys_to_virt(paddr).as_mut_ptr(),
+            length,
+        );
+    }
+
+    // 返回起始的虚拟内存地址
+    start_addr.as_usize() as isize
+    // ****** END   xisanlou add at 25122606 No.2
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {

@@ -55,7 +55,10 @@ extern crate alloc;
 
 #[cfg(feature = "alloc")]
 #[doc(no_inline)]
-pub use alloc::{boxed, collections, format, string, vec};
+// ****** START xisanlou add at  25102404 No.1
+pub use alloc::{boxed, format, string, vec};
+//pub use alloc::{boxed, collections, format, string, vec};
+// ****** END   xisanlou add at 25102404 No.1
 
 #[doc(no_inline)]
 pub use core::{arch, cell, cmp, hint, marker, mem, ops, ptr, slice, str};
@@ -75,3 +78,10 @@ pub mod time;
 pub mod fs;
 #[cfg(feature = "net")]
 pub mod net;
+
+// ****** START xisanlou add at  25102404 No.2
+#[cfg(feature = "alloc")]
+pub mod collections;
+#[cfg(feature = "alloc")]
+pub mod hash;
+// ****** END   xisanlou add at 25102404 No.2

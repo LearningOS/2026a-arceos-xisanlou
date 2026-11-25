@@ -80,3 +80,6 @@ arceos_api = { workspace = true }
 axio = "0.1"
 axerrno = "0.1"
 kspin = "0.1"
+# ****** START xisanlou add at  2510204 No.1
+hashbrown = { version = "=0.14.5", default-features = false }
+# ****** END xisanlou add at  2510204 No.1

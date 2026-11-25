@@ -99,6 +99,53 @@ impl RootDirectory {
             f(self.mounts[idx].fs.clone(), &path[max_len..]) // matched at `idx`
         }
     }
+
+    // ****** START xisanlou add at  2510204 No.1
+    fn lookup_in_same_mounted_fs<F, T>(&self, src_path: &str, dst_path: &str, f: F) -> AxResult<T>
+    where
+        F: FnOnce(Arc<dyn VfsOps>, &str, &str) -> AxResult<T>,
+    {
+        debug!("lookup at root: src_path={}, dst_path={}", src_path, dst_path);
+        let src_path = src_path.trim_matches('/');
+        if let Some(src_rest) = src_path.strip_prefix("./") {
+            return self.lookup_in_same_mounted_fs(src_rest, dst_path, f);
+        }
+        let dst_path = dst_path.trim_matches('/');
+        if let Some(dst_rest) = dst_path.strip_prefix("./") {
+            return self.lookup_in_same_mounted_fs(src_path, dst_rest, f);
+        }
+
+        let mut src_idx = 0;
+        let mut src_max_len = 0;
+        let mut dst_idx = 0;
+        let mut dst_max_len = 0;
+
+        // Find the filesystem that has the longest mounted path match
+        // TODO: more efficient, e.g. trie
+        for (i, mp) in self.mounts.iter().enumerate() {
+            // skip the first '/'
+            if src_path.starts_with(&mp.path[1..]) && mp.path.len() - 1 > src_max_len {
+                src_max_len = mp.path.len() - 1;
+                src_idx = i;
+            }
+
+            if dst_path.starts_with(&mp.path[1..]) && mp.path.len() - 1 > dst_max_len {
+                dst_max_len = mp.path.len() - 1;
+                dst_idx = i;
+            }
+        }
+        
+        if src_max_len != dst_max_len || src_idx != dst_idx {
+            // 源与目标处于不同文件系统
+            return Err(AxError::InvalidInput)
+        } else if src_max_len == 0 {
+            // 主文件系统
+            f(self.main_fs.clone(), src_path, dst_path) // not matched any mount point
+        } else {
+            f(self.mounts[src_idx].fs.clone(), &src_path[src_max_len..].trim_matches('/'), &dst_path[dst_max_len..].trim_matches('/'))
+        }
+    }
+    // ****** END   xisanlou add at 25102404 No.1
 }
 
 impl VfsNodeOps for RootDirectory {
@@ -133,6 +180,8 @@ impl VfsNodeOps for RootDirectory {
     }
 
     fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
+        // ****** START xisanlou add at  2510204 No.2
+        /*
         self.lookup_mounted_fs(src_path, |fs, rest_path| {
             if rest_path.is_empty() {
                 ax_err!(PermissionDenied) // cannot rename mount points
@@ -140,6 +189,15 @@ impl VfsNodeOps for RootDirectory {
                 fs.root_dir().rename(rest_path, dst_path)
             }
         })
+        */
+        self.lookup_in_same_mounted_fs(src_path, dst_path, |fs, rest_src_path, rest_dst_path| {
+            if rest_src_path.is_empty() || rest_dst_path.is_empty() {
+                ax_err!(PermissionDenied) // cannot rename mount points
+            } else {
+                fs.root_dir().rename(rest_src_path, rest_dst_path)
+            }
+        })
+        // ****** END   xisanlou add at 25102404 No.2
     }
 }
 
